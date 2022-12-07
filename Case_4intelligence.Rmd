@@ -1,0 +1,171 @@
+---
+---
+---
+
+------------------------------------------------------------------------
+
+title: "Case 4Intelligence
+
+```{r}
+#install.packages("readxl")
+#install.packages("tidyverse")
+#install.packages("tidyr")
+#install.packages("dplyr")
+#install.packages("zoo")
+#install.packages("seasonal")
+
+library(readxl)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(zoo)
+library(seasonal)
+```
+
+--- A base de dados fornecida é um arquivo de formato xlsx, que contém três sheets, Diesel, Gasolina e Etanol, respectivamente. Antes de iniciar a aálise de vizualização é necessário realizar uma etapa de pré-processamento. 
+    Iremos importar cada um dos sheets do arquivo em formato de data frame, assim, separaando-os por tipo de combustível e facilitando a análise. 
+    Após isso, é necessário transformar a estrutura dos dados no formato apropriado para séries temporais, isto é, será necessário "empilha-los", também conhecido como tidy data.
+    
+```{r}
+df_diesel <- read_xlsx("dados_desafiodatascientistintern_vendas_distribuidoras_anp.xlsx")
+df_gasolina <- read_xlsx("dados_desafiodatascientistintern_vendas_distribuidoras_anp.xlsx", sheet = "gasolina")
+df_etanol <- read_xlsx("dados_desafiodatascientistintern_vendas_distribuidoras_anp.xlsx", sheet = "etanol")
+
+df_diesel_tidy <- gather(df_diesel, Ano, Diesel, -regiao, -meses)
+df_gasolina_tidy <- gather(df_gasolina, Ano, Gasolina, -regiao, -meses)
+df_etanol_tidy <- gather(df_etanol, Ano, Etanol, -regiao, -meses)
+
+df_diesel_tidy$Data <- as.yearmon(paste(df_diesel_tidy$Ano, df_diesel_tidy$meses), "%Y %m")
+df_gasolina_tidy$Data <- as.yearmon(paste(df_gasolina_tidy$Ano, df_gasolina_tidy$meses), "%Y %m")
+df_etanol_tidy$Data <- as.yearmon(paste(df_etanol_tidy$Ano, df_etanol_tidy$meses), "%Y %m")
+
+df_diesel_tidy <- df_diesel_tidy[ ,-2:-3]
+df_gasolina_tidy <- df_gasolina_tidy[ ,-2:-3]
+df_etanol_tidy <- df_etanol_tidy[ ,-2:-3]
+
+str(df_diesel_tidy)
+str(df_gasolina_tidy)
+str(df_etanol_tidy)
+
+df_diesel_tidy$Data <- as.Date(df_diesel_tidy$Data)
+df_gasolina_tidy$Data <- as.Date(df_gasolina_tidy$Data)
+df_etanol_tidy$Data <- as.Date(df_etanol_tidy$Data)
+
+```
+
+--- Com a base de dados pronta, partiremos para a etapa de vizualização dos dados. Com o objetivo de melhor entendimento do mercado de combustíveis, iremos criar gráficos para cada UF disponível no arquivo, além do nível nacional (br).
+    Analisando as séries em nível nacional, para um entendiento geral do mercado de combustíveis, pode-se notar um comportamente semelhante entre as séries, com um forte componente sazonal no último trimestre do ano, sobretudo em dezembro/novembro, onde a venda de combustíveis costuma atingir seu máximo anual, e também um componente sazonal de baixa no primeiro trimestre do ano, sobretudo em janeiro/fevereiro, onde normalmente as vendas de combustível no brasil atingem a mínima anual. 
+    É interessante destacar que para o álcool e gasolina, o pico anual costuma ocorrer em dezembro, provavelmente por conta da característica do mercado, onde esses combustíveis são majoritariamente utilizados em veículos de passeio, assim, dezembro costuma ser um mês de férias, onde muitas famílias viajam, o que pode explicar essa sazonalidade. 
+    Já com relação ao Diesel, nota-se que essa alta ocorre novembro/outubro, infere-se que essa alta acompanha o movimento do setor industrial e varejista que costuma se preparar para as vendas de black friday e vendas de final de ano. 
+    Essa sazonalidade é identificada também no comportamento dos estados, apesar disso, os estados possuem bastante diferenciação com relação à variância das observações, por exemplo, o diesel no estado do para possui uma amplitude vizualmente identificada bem menor do que o estado de São Paulo, por exemplo. 
+
+```{r}
+#série original Diesel
+for (i in unique(df_diesel_tidy$regiao)) {
+  print(ggplot(df_diesel_tidy %>% filter(regiao == i), aes(Data, Diesel)) + 
+          geom_line() + ggtitle(paste("Evolução Vendas Diesel - Região", i, sep = " ")) + theme(plot.title = element_text(hjust = 0.5)))
+}
+
+#Por região: série original vs ajuste sazonal (Diesel)
+for (i in unique(df_diesel_tidy$regiao)) {
+  df_diesel_tidy_plot <- df_diesel_tidy %>% filter(regiao == i)
+  plot(df_diesel_tidy_plot$Data, df_diesel_tidy_plot$Diesel, main = paste("Evolução Vendas Diesel - Região", i, sep = " "))
+  
+  regiao_br <- ts(df_diesel_tidy_plot$Diesel, start = c(2000, 1) , frequency = 12) 
+  dessaz_br <- seas(regiao_br, x11 = "")
+  plot(dessaz_br, main = paste("Evolução Vendas Diesel com Ajuste Sazonal - Região", i, sep = " "))
+  grid(nx = 23)
+  legend("topleft", legend = c("Original", "Ajustada"), col = c(1, 2), lwd = c(1, 2), 
+         lty = 1, bty = "n", cex = 0.6)
+}
+
+#série original Gasolina
+for (i in unique(df_gasolina_tidy$regiao)) {
+  print(ggplot(df_gasolina_tidy %>% filter(regiao == i), aes(Data, Gasolina)) + 
+          geom_line() + ggtitle(paste("Evolução Vendas Gasolina - Região", i, sep = " ")) + theme(plot.title = element_text(hjust = 0.5)))
+}
+
+#Por região: série original vs ajuste sazonal (Gasolina)
+for (i in unique(df_gasolina_tidy$regiao)) {
+  df_gasolina_tidy_plot <- df_gasolina_tidy %>% filter(regiao == i)
+  plot(df_gasolina_tidy_plot$Data, df_gasolina_tidy_plot$Gasolina, main = paste("Evolução Vendas Gasolina - Região", i, sep = " "))
+  
+  regiao_br <- ts(df_gasolina_tidy_plot$Gasolina, start = c(2000, 1) , frequency = 12) 
+  dessaz_br <- seas(regiao_br, x11 = "")
+  plot(dessaz_br, main = paste("Evolução Vendas Gasolina com Ajuste Sazonal - Região", i, sep = " "))
+  grid(nx = 23)
+  legend("topleft", legend = c("Original", "Ajustada"), col = c(1, 2), lwd = c(1, 2), 
+         lty = 1, bty = "n", cex = 0.6)
+}
+
+#Por região: série original vs ajuste sazonal (Gasolina)
+for (i in unique(df_etanol_tidy$regiao)) {
+  df_etanol_tidy_plot <- df_etanol_tidy %>% filter(regiao == i)
+  plot(df_etanol_tidy_plot$Data, df_etanol_tidy_plot$Etanol, main = paste("Evolução Vendas Etanol - Região", i, sep = " "))
+  
+  regiao_br <- ts(df_etanol_tidy_plot$Etanol, start = c(2000, 1) , frequency = 12) 
+  dessaz_br <- seas(regiao_br, x11 = "")
+  plot(dessaz_br, main = paste("Evolução Vendas Etanol com Ajuste Sazonal - Região", i, sep = " "))
+  grid(nx = 23)
+  legend("topleft", legend = c("Original", "Ajustada"), col = c(1, 2), lwd = c(1, 2), 
+         lty = 1, bty = "n", cex = 0.6)
+}
+
+```
+
+--- Abaixo, encontra-se a distribuição dos tipos de combustível por estado. Analisandos os gráficos de barra, pode-se concluir que as vendas de combustível são maiores no estado de São Paulo, seguido por Minas Gerais.
+
+```{r}
+#Consumo de Gasolina por estado média dos últimos 20 anos
+df_gasolina_tidy_semBR <- df_gasolina_tidy %>% filter(!regiao == "br")
+barplot(tapply(df_gasolina_tidy_semBR$Gasolina, df_gasolina_tidy_semBR$regiao, mean),
+        col = "orange", horiz = T, main = "Média das vendas de Gasolina por estado 2000 - 2020")
+
+#Consumo de Etanol por estado, média dos últimos 20 anos
+df_etanol_tidy_semBR <- df_etanol_tidy %>% filter(!regiao == "br")
+barplot(tapply(df_etanol_tidy_semBR$Etanol, df_etanol_tidy_semBR$regiao, mean),
+        col = "orange", horiz = T, main = "Média das vendas de Etanol por estado 2000 - 2020")
+        
+#Consumo de Diesel por estado média dos últimos 20 anos
+df_diesel_tidy_semBR <- df_diesel_tidy %>% filter(!regiao == "br")
+barplot(tapply(df_diesel_tidy_semBR$Diesel, df_diesel_tidy_semBR$regiao, mean),
+        col = "orange", horiz = T, main = "Média das vendas de Diesel por estado 2000 - 2020")
+
+```
+
+--- O tamanho total médio do mercado nos útlimos 20 anos é de 7.584.254 metros cúbicos de combustíveis. Além disso, analisando o a evolução do mercado nos últimos 5 anos pode-se notar uma tendência positiva, mesmo com o impacto da pandemia de COVID-19 em 2020. 
+
+```{r}
+#Analisando o tamanho total do mercado e a evolução deste nos últimos 5 anos# 
+df_consolidado <- full_join(x = df_diesel_tidy, y = df_gasolina_tidy)
+df_consolidado <- full_join(x = df_consolidado, y = df_etanol_tidy)
+df_consolidado_tidy_BR <- df_consolidado %>% filter(regiao == "br")
+df_tamanho_do_mercado <- df_consolidado_tidy_BR %>% group_by(Data) %>% summarise(Combustivel_Agregados=sum(Diesel, Gasolina, Etanol))
+
+ggplot(df_tamanho_do_mercado %>% filter(Data >= "2016-01-01"), aes(Data, Combustivel_Agregados)) + 
+  geom_line() + geom_smooth(method = lm) + ggtitle("Evolução Vendas de Combustíveis Total") + theme(plot.title = element_text(hjust = 0.5))
+
+mean(df_tamanho_do_mercado$Combustivel_Agregados)
+
+```
+
+    library(rmarkdown)
+    render("case4intelligence.Rmd")
+
+```{r}
+library(seasonal)
+```
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code.
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*.
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
